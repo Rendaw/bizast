@@ -1,0 +1,20 @@
+<html>
+<head>
+<title>Configure bizast</title>
+<script type="text/javascript">
+function register() 
+{
+	navigator.registerProtocolHandler(
+		'bz', 
+		'http://' + location.hostname + (location.port ? ':' + location.port : '') + '/%s', 
+		'bizast')
+}
+</script>
+</head>
+
+<body>
+<form action="javascript:register()">
+	<input type="submit" value="Bizast me!" />
+</form>
+</body>
+</html>
