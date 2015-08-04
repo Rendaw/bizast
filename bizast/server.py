@@ -190,8 +190,8 @@ def twisted_main(args):
     republish_loop.start(1 * 60 * 60 * 24)
 
     # Set up webserver
-    with open(res('response_template.html'), 'r') as template:
-        response_html = template.read()
+    with open(res('redirect_template.html'), 'r') as template:
+        redirect_template = template.read()
     class Resource(resource.Resource):
         def getChild(self, child, request):
             return self
@@ -209,17 +209,17 @@ def twisted_main(args):
                 if not value:
                     request.write(NoResource().render(request))
                 else:
-                    value = json.loads(value)
                     valid, ign, ign = validate(None, value, None)
                     if not valid:
                         request.write(NoResource('Received invalid resource: {}'.format(value)).render(request))
                     else:
+                        value = json.loads(value)
                         message = value['message']
-                        if any(
-                                'text/html' in val 
-                                for val in (request.responseHeaders.getRawHeaders('Accept') or [])
-                                ):
-                            if (urlmatch.match(value) and '\'' not in message and '"' not in message):
+                        print(request.requestHeaders.getRawHeaders('Accept', []))
+                        print('text/html' in request.requestHeaders.getRawHeaders('Accept', []))
+                        print(any('text/html' in val for val in request.requestHeaders.getRawHeaders('Accept', [])))
+                        if any('text/html' in val for val in request.requestHeaders.getRawHeaders('Accept', [])):
+                            if urlmatch.match(message) and '\'' not in message and '"' not in message:
                                 request.write(redirect_template.format(
                                     resource=message).encode('utf-8'))
                             else:
