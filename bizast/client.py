@@ -17,6 +17,7 @@ import nacl.utils
 from nacl.encoding import RawEncoder as eraw
 import requests
 
+import server
 import naclkeys
 
 cache = appdirs.user_cache_dir('bizast-client', 'zarbosoft')

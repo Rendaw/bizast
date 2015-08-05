@@ -81,7 +81,7 @@ where HASH is the hex value dumped in the previous step.  You can also open your
 Run
 
 ```
-bizast_client http://my-ip-address/blog
+bizast_client myblog http://my-ip-address/blog
 ```
 
 Note the value dumped to the command line.  
