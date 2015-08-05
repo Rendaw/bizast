@@ -8,6 +8,7 @@ import pkg_resources
 import re
 import urllib
 from distutils.dir_util import mkpath as mkdirs
+from collections import OrderedDict
 
 from twisted.application import internet
 from twisted.python import log
@@ -23,12 +24,13 @@ import appdirs
 import nacl.signing
 import nacl.hash
 from nacl.encoding import RawEncoder as eraw
-
-# TODO priority metric for discarding values in storage
+from zope.interface import implements
+from pqdict import PQDict
 
 default_webport = 62341
 urlmatch = re.compile('[a-zA-Z+]+://')
 webprotocol = 'bz://'
+
 
 def res(path):
     return pkg_resources.resource_filename('bizast', path)
@@ -129,15 +131,76 @@ def twisted_main(args):
     republish = state.get('republish', {})
 
     # Set up kademlia
-    class Storage(kademlia.storage.ForgetfulStorage):
-        def __setitem__(self, hashed_rec_key, value):
-            oldvalue = self.get(hashed_rec_key)
-            if not validate(hashed_rec_key, value, oldvalue)[0]:
-                return
-            super(Storage, self).__setitem__(hashed_rec_key, value)
+    class Storage:
+        implements(kademlia.storage.IStorage)
 
-        def __getitem__(self, hashed_rec_key):
-            return super(Storage, self).__getitem__(hashed_rec_key)
+        max_len = 5000
+
+        def __init__(self, ttl=604800):
+            # linked
+            self.popularity_queue = PQDict()
+            self.age_dict = OrderedDict()
+
+            # separate
+            self.future_popularity_queue = PQDict()
+
+            self.step = ttl
+
+        def cull(self):
+            if len(self.popularity_queue) > self.max_len:
+                key = self.popularity_queue.pop()
+                del self.age_dict[key]
+                del self.dict[key]
+            if len(self.future_popularity_queue) > self.max_len:
+                self.future_popularity_queue.pop()
+
+        def inc_popularity(self, key):
+            current = self.popularity_queue.get(key)
+            if current:
+                self.popularity_queue[key] = current + self.step
+            else:
+                current = self.future_popularity_queue.get(key, time.time())
+                self.future_popularity_queue[key] = current + self.step
+
+        def _tripleIterable(self):
+            ikeys = self.age_dict.iterkeys()
+            ibirthday = imap(operator.itemgetter(0), self.age_dict.itervalues())
+            ivalues = imap(operator.itemgetter(1), self.age_dict.itervalues())
+            return izip(ikeys, ibirthday, ivalues)
+
+        # interface methods below
+        def __setitem__(self, key, value):
+            age, oldvalue = self.age_dict.get(key) or time.time(), None
+            if not validate(key, value, oldvalue)[0]:
+                return
+            if oldvalue:
+                self.age_dict[key] = (age, value)
+            else:
+                self.age_dict[key] = (time.time(), value)
+                self.popularity_queue[key] = time.time()
+            self.cull()
+
+        def __getitem__(self, key):
+            self.inc_popularity(key)
+            self.cull()
+            return self.age_dict[key]
+
+        def get(self, key, default=None):
+            self.inc_popularity(key)
+            self.cull()
+            if key in self.age_dict:
+                return self.age_dict[key]
+            return default
+
+        def iteritemsOlderThan(self, secondsOld):
+            minBirthday = time.time() - secondsOld
+            zipped = self._tripleIterable()
+            matches = takewhile(lambda r: minBirthday >= r[1], zipped)
+            return imap(operator.itemgetter(0, 2), matches)
+
+        def iteritems(self):
+            self.cull()
+            return self.age_dict.iteritems()
 
     kserver = Server(
         ksize=state.get('ksize', 20), 
