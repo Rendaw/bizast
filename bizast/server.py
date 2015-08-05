@@ -184,13 +184,13 @@ def twisted_main(args):
         def __getitem__(self, key):
             self.inc_popularity(key)
             self.cull()
-            return self.age_dict[key]
+            return self.age_dict[key][1]
 
         def get(self, key, default=None):
             self.inc_popularity(key)
             self.cull()
             if key in self.age_dict:
-                return self.age_dict[key]
+                return self.age_dict[key][1]
             return default
 
         def iteritemsOlderThan(self, secondsOld):
