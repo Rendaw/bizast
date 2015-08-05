@@ -37,14 +37,14 @@ class Key:
 
     @classmethod
     def new(cls, name):
-        check_name(name)
+        Key._check_name(name)
         seed = nacl.utils.random()
         signing_key = nacl.signing.SigningKey(seed, encoder=eraw)
         verify_key = signing_key.verify_key.encode(eraw)
         return cls(
             new=True,
             name=name,
-            fingerprint=binascii.hexlify(nacl.hash.sha256(verify_key)),
+            fingerprint=binascii.hexlify(nacl.hash.sha256(verify_key, encoder=eraw)),
             seed=seed,
         )
         return self
@@ -71,9 +71,9 @@ class Key:
         seed = None
         encrypted_seed = None
         if 'nonce' in data:
-            counter = from_nonce(binascii.unhexlify(data['nonce']))
+            counter = self._from_nonce(binascii.unhexlify(data['nonce']))
         if 'seed' in data:
-            seed = binascii.unhexlify(data'seed'])
+            seed = binascii.unhexlify(data['seed'])
         if 'encrypted_seed' in data:
             encrypted_seed = binascii.unhexlify(data['encrypted_seed'])
         return cls(
@@ -94,7 +94,7 @@ class Key:
             'name': self.name,
         }
         if self.counter:
-            out['nonce'] = binascii.hexlify(to_nonce(self.counter))
+            out['nonce'] = binascii.hexlify(self._to_nonce(self.counter))
         if self.encrypted_seed:
             out['encrypted_seed'] = binascii.hexlify(self.encrypted_seed)
         else:
@@ -115,18 +115,14 @@ class Key:
                     'Key file [{}] already exists'.format(filename))
             file.write(self.dump())
             file.close()
-            os.close(fd)
             self.new = False
         else:
             temp = tempfile.NamedTemporaryFile(dir=self.fileroot, delete=False)
             temp.write(self.dump())
             temp.close()
             os.rename(temp.name, self.filename)
-        if args.default:
-            write_default(self.filename)
-
-    def fingerprint(self):
-        return self.fingerprint
+        if default:
+            self._write_default(self.filename)
 
     def verify_key(self):
         self._get_key()
@@ -144,7 +140,11 @@ class Key:
             passphrase = self._getpass(True)
         passphrase_seed = nacl.hash.sha256(passphrase, encoder=eraw)
         box = nacl.secret.SecretBox(passphrase_seed)
-        self.nonce = to_nonce(self.counter + 1)
+        if not self.counter:
+            self.counter = 0
+        else:
+            self.counter += 1
+        nonce = self._to_nonce(self.counter)
         self.encrypted_seed = box.encrypt(self.seed, nonce, encoder=eraw).ciphertext
         self.passphrase = passphrase
 
@@ -152,13 +152,13 @@ class Key:
         self._get_seed()
         self.encrypted_seed = None
 
-    def _getseed(self):
+    def _get_seed(self):
         if not self.seed:
             if not self.passphrase:
                 self.passphrase = self._getpass(False)
             passphrase_seed = nacl.hash.sha256(self.passphrase, encoder=eraw)
             box = nacl.secret.SecretBox(passphrase_seed)
-            nonce = to_nonce(self.counter)
+            nonce = self._to_nonce(self.counter)
             self.seed = box.decrypt(self.encrypted_seed, nonce=nonce, encoder=eraw)
 
     @staticmethod
@@ -220,15 +220,15 @@ def main():
         action='store_true',
     )
     gen_command.add_argument(
-        '-s', 
-        '--store',
-        help='Store in default location',
+        '-u', 
+        '--dump',
+        help='Print rather than store key',
         action='store_true',
     )
     gen_command.add_argument(
-        '-d', 
-        '--default',
-        help='Make stored key default (implies store)',
+        '-a', 
+        '--alternate',
+        help='Don\'t make the new key the default',
         action='store_true',
     )
     
@@ -263,14 +263,15 @@ def main():
 
     if args.command == 'gen':
         key = Key.new(args.name)
+        if args.alternate and args.dump:
+            parser.error('Can\'t specify both alternate and print')
         if not args.nopassphrase:
             key.set_passphrase()
-        if args.default:
-            args.store = True
-        if args.store:
-            key.store(args.default)
-        else:
+        if args.dump:
             print(key.dump())
+        else:
+            key.save(not args.alternate)
+            print(key.fingerprint)
 
     elif args.command == 'mod':
         key = Key.open(args.key, args.passphrase)

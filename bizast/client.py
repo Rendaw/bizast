@@ -71,7 +71,7 @@ def main():
     publisher = naclkeys.Key.open(args.key)
     key = '{}:{}'.format(
         args.name, 
-        publisher.fingerprint())
+        publisher.fingerprint)
 
     # Get old record if present
     resp = requests.get(

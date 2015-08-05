@@ -19,12 +19,14 @@ setup(
         'kademlia',
         'appdirs',
         'requests',
+        'pqdict',
     ],
     packages = [
         'bizast', 
     ],
     entry_points = {
         'console_scripts': [
+            'naclkeys = bizast.naclkeys:main',
             'bizast_server = bizast.server:main',
             'bizast_client = bizast.client:main',
         ],
