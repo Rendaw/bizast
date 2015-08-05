@@ -217,6 +217,8 @@ def twisted_main(args):
         bport = int(bport)
         bhost_ip = yield reactor.resolve(bhost)
         bootstraps.append((bhost_ip, bport))
+    if args.verbose:
+        log_info('Bootstrapping hosts: {}'.format(bootstraps))
     kserver.bootstrap(bootstraps)
 
     udpserver = internet.UDPServer(args.dhtport, kserver.protocol)
