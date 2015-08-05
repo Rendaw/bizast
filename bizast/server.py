@@ -16,7 +16,7 @@ from twisted.python import log
 from twisted.web import resource, server
 from twisted.web.resource import NoResource
 from twisted.internet import reactor, defer
-from twisted.internet.task import react, LoopingCall
+from twisted.internet.task import react, LoopingCall, deferLater
 from kademlia.network import Server
 from kademlia import log
 import kademlia.storage
@@ -246,14 +246,16 @@ def twisted_main(args):
     save_state_loop.start(60)
 
     # Set up value republisher
-    @defer.inlineCallbacks
-    def republish_call():
-        for key, val in republish.items():
-            if args.verbose:
-                log_info('Republishing {}'.format(key))
-            yield kserver.set(key, val)
-    republish_loop = LoopingCall(republish_call)
-    republish_loop.start(1 * 60 * 60 * 24)
+    def start_republish():
+        @defer.inlineCallbacks
+        def republish_call():
+            for key, val in republish.items():
+                if args.verbose:
+                    log_info('Republishing {}'.format(key))
+                yield kserver.set(key, val)
+        republish_loop = LoopingCall(republish_call)
+        republish_loop.start(1 * 60 * 60 * 24)
+    deferLater(reactor, 60, start_republish)
 
     # Set up webserver
     with open(res('redirect_template.html'), 'r') as template:
