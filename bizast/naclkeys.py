@@ -19,6 +19,9 @@ from nacl.encoding import RawEncoder as eraw
 root = appdirs.user_data_dir('naclkeys', 'zarbosoft')
 keydir = os.path.join(root, 'keys')
 
+
+# TODO file leaks
+
 class Key:
     def __init__(self, **kwargs):
         self.new = kwargs.pop('new')
@@ -32,7 +35,7 @@ class Key:
         self.encrypted_seed = kwargs.pop('encrypted_seed', None)
         if not self.seed and not self.encrypted_seed:
             raise ValueError('Invalid key: missing both seed and encrypted_seed')
-        if self.encrypted_seed and not self.counter:
+        if self.encrypted_seed and self.counter is None:
             raise ValueError('Invalid key: missing counter/nonce for encrypted_seed')
 
     @classmethod
@@ -56,13 +59,13 @@ class Key:
                 name = default.read()
         if not name:
             raise RuntimeError('No default key configured')
-        filedir = keydir
-        filename = os.path.join(keydir, name)
-        file = open(filename, 'r+' if not ro else 'r')
+        fileroot = keydir
+        filename = os.path.join(fileroot, name)
+        file = open(filename, 'r')
         if not file:
             filename = name
-            filedir, ign = os.path.split(name)
-            file = open(name, 'r+' if not ro else 'r')
+            fileroot, ign = os.path.split(name)
+            file = open(name, 'r')
         if not file:
             raise RuntimeError(
                 'Key [{}] is neither a stored key or key path'.format(name))
@@ -71,18 +74,20 @@ class Key:
         seed = None
         encrypted_seed = None
         if 'nonce' in data:
-            counter = self._from_nonce(binascii.unhexlify(data['nonce']))
+            counter = Key._from_nonce(binascii.unhexlify(data['nonce']))
         if 'seed' in data:
             seed = binascii.unhexlify(data['seed'])
         if 'encrypted_seed' in data:
             encrypted_seed = binascii.unhexlify(data['encrypted_seed'])
+        fingerprint = data['fingerprint']
+        file.close()
         return cls(
             new=False,
             name=name,
             filename=filename,
             fileroot=fileroot,
             passphrase=passphrase,
-            fingerprint=data['fingerprint'],
+            fingerprint=fingerprint,
             seed=seed,
             counter=counter,
             encrypted_seed=encrypted_seed,
@@ -93,7 +98,7 @@ class Key:
             'fingerprint': self.fingerprint,
             'name': self.name,
         }
-        if self.counter:
+        if self.counter is not None:
             out['nonce'] = binascii.hexlify(self._to_nonce(self.counter))
         if self.encrypted_seed:
             out['encrypted_seed'] = binascii.hexlify(self.encrypted_seed)
@@ -125,7 +130,7 @@ class Key:
             self._write_default(self.filename)
 
     def verify_key(self):
-        self._get_key()
+        self._get_seed()
         signing_key = nacl.signing.SigningKey(self.seed, encoder=eraw)
         return signing_key.verify_key.encode(eraw)
 
@@ -140,7 +145,7 @@ class Key:
             passphrase = self._getpass(True)
         passphrase_seed = nacl.hash.sha256(passphrase, encoder=eraw)
         box = nacl.secret.SecretBox(passphrase_seed)
-        if not self.counter:
+        if self.counter is None:
             self.counter = 0
         else:
             self.counter += 1
