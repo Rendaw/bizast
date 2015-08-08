@@ -206,10 +206,7 @@ def twisted_main(args):
     kserver = Server(
         ksize=state.get('ksize', 20), 
         alpha=state.get('alpha', 3), 
-        id=(
-            binascii.unhexlify(state['id'][0]),
-            binascii.unhexlify(state['id'][1]),
-        ) if 'id' in state else None, 
+        seed=binascii.unhexlify(state['seed']) if 'seed' in state else None, 
         storage=Storage())
     bootstraps = map(tuple, state.get('bootstrap', []))
     for bootstrap in args.bootstrap:
@@ -230,10 +227,7 @@ def twisted_main(args):
             log_info('Saving state')
         state['ksize'] = kserver.ksize
         state['alpha'] = kserver.alpha
-        state['id'] = (
-            binascii.hexlify(kserver.node.id[0]),
-            binascii.hexlify(kserver.node.id[1]),
-        )
+        state['seed'] = binascii.hexlify(kserver.node.seed)
         state['republish'] = republish
         state['bootstrap'] = kserver.bootstrappableNeighbors()
         with open(os.path.join(root, 'state.json.1'), 'w') as prestate:
