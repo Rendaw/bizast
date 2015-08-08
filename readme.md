@@ -2,7 +2,7 @@
 
 ## Summary
 
-bizast allows you to associate a name with a web resource, like an ip address or a magnet url.  It serves a role similar to DNS, but unlike DNS it is distributed so a server is not required.
+bizast allows you to associate a name with a web resource, like an ip address or a magnet url.  It serves a role similar to DNS, but unlike DNS it is distributed so registration with a central authority is not required.
 
 ## Unsummary
 
