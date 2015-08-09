@@ -50,7 +50,7 @@ You should be able to run `bizast_server` now.  If you get a prompt to allow net
 Run
 
 ```
-bizast_server
+bizast
 ```
 
 This is basically what `bizast.service` does if you're running the systemd unit.
@@ -87,28 +87,15 @@ Follow the instructions.  The key will be in `~/.local/share/naclkeys/keys` on L
 
 The hex value dumped to the command line is the key's fingerprint and will be used in the next step.
 
-## Start a node that allows publishing with your key
-
-Run
-
-```
-bizast_server -p FINGERPRINT
-```
-
-where FINGERPRINT is the hex value dumped in the previous step.  You can also open your key file in a text editor and copy the value under `fingerprint` if you forgot the value from the previous step.
-
-`-p FINGERPRINT` can be specified multiple times with different keys to whitelist different keys.
-
-As long as this server is running it will republish any resources published with whitelisted keys periodically.
-
 ## Publish something
 
 Run
 
 ```
-bizast_client NAME http://my-ip-address/blog
+bizastpub the-great-unknown magnet:?xt=urn:sha1:YNCKHTQCWBTRNJIV4WNAE52SJUQCZO5C
+bizastpub MyBlog http://www.example.com/blog
 ```
 
-The value dumped to the command line is the address you published, and is constant for a NAME-key pair.
+`the-great-unknown` and 'MyBlog` are names.  A name combined with a key fingerprint is an address, and is constant for a name-key pair.  The commands above will dump the final address to the command line so you can put it in a letter to a friend or write it on a sticky note or whatever.
 
-If this worked, you should be able to open [bz://ADDRESS] in your browser (ADDRESS is the value dumped to the command line in this step) and be redirected to [http://my-ip-address/blog].
+If you enter the addresses returned above into your browser, you would be redirected to [magnet:?xt=urn:sha1:YNCKHTQCWBTRNJIV4WNAE52SJUQCZO5C] and [http://www.example.com/blog] respectively.

@@ -299,10 +299,6 @@ def twisted_main(args):
             valid, rec_key, fingerprint = validate(None, value, None)
             if not valid:
                 raise ValueError('Failed verification')
-            if fingerprint not in args.publish:
-                raise ValueError(
-                    'Fingerprint {} not in publish whitelist'.format(
-                        fingerprint))
             log.msg('SET: key [{}] = val [{}]'.format(rec_key, value))
             republish[rec_key] = value
             def respond(result):
@@ -329,13 +325,6 @@ def twisted_main(args):
 def main():
     parser = argparse.ArgumentParser(
         description='Become bizast',
-    )
-    parser.add_argument(
-        '-p',
-        '--publish', 
-        nargs='+',
-        help='Fingerprints of records to actively publish.', 
-        default=[],
     )
     parser.add_argument(
         '-d',

@@ -27,8 +27,8 @@ setup(
     entry_points = {
         'console_scripts': [
             'naclkeys = bizast.naclkeys:main',
-            'bizast_server = bizast.server:main',
-            'bizast_client = bizast.client:main',
+            'bizast = bizast.bizast:main',
+            'bizastpub = bizast.publish:main',
         ],
     },
     include_package_resources=True,

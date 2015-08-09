@@ -17,7 +17,7 @@ import nacl.utils
 from nacl.encoding import RawEncoder as eraw
 import requests
 
-import server
+import bizast
 import naclkeys
 
 cache = appdirs.user_cache_dir('bizast-client', 'zarbosoft')
@@ -56,15 +56,15 @@ def main():
     parser.add_argument(
         '-w',
         '--webhost',
-        help='Bizast web server host',
+        help='Bizast web bizast host',
         default='localhost',
     )
     parser.add_argument(
         '-p',
         '--webport',
-        help='Bizast web server port',
+        help='Bizast web bizast port',
         type=int,
-        default=server.default_webport,
+        default=bizast.default_webport,
     )
 
     args = parser.parse_args()
@@ -92,7 +92,7 @@ def main():
         'key': binascii.hexlify(publisher.verify_key()),
         'name': args.name,
     }
-    plaintext = server.plaintext(value)
+    plaintext = bizast.plaintext(value)
     value['signature'] = binascii.hexlify(publisher.sign(plaintext))
 
     # Publish
