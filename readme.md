@@ -20,7 +20,7 @@ Requires Python 2.
 
 Run:
 ```
-pip install git+https://github.com/Rendaw/kademlia.git@verified-unpredictable-ids
+pip install git+https://github.com/Rendaw/kademlia.git@verifiably-unpredictable-ids
 pip install git+https://github.com/Rendaw/bizast
 ```
 
