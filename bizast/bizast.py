@@ -267,6 +267,11 @@ def twisted_main(args):
                 key = key[len(webprotocol):]
             if key.count(':') != 1:
                 raise ValueError('Invalid resource id')
+            try:
+                key, path = key.split('/', 1)
+                path = '/' + path
+            except ValueError:
+                path = ''
             def respond(value):
                 if not value:
                     request.write(NoResource().render(request))
@@ -276,11 +281,8 @@ def twisted_main(args):
                         request.write(NoResource('Received invalid resource: {}'.format(value)).render(request))
                     else:
                         value = json.loads(value)
-                        message = value['message']
-                        print(request.requestHeaders.getRawHeaders('Accept', []))
-                        print('text/html' in request.requestHeaders.getRawHeaders('Accept', []))
-                        print(any('text/html' in val for val in request.requestHeaders.getRawHeaders('Accept', [])))
                         if any('text/html' in val for val in request.requestHeaders.getRawHeaders('Accept', [])):
+                            message = value['message'] + path
                             if urlmatch.match(message) and '\'' not in message and '"' not in message:
                                 request.write(redirect_template.format(
                                     resource=message).encode('utf-8'))
