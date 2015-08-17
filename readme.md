@@ -71,7 +71,7 @@ google-chrome-stable http://localhost:62341/setup
 
 and press the button.
 
-Try to open <web+bz://test:370dc4f518483ff681c9731fc04f320b9d7670fe0359147d0b1b28710f319f5c> in a browser.  It should redirect you to <https://github.com/Rendaw/bizast>.
+Try to open [web+bz://test:370dc4f518483ff681c9731fc04f320b9d7670fe0359147d0b1b28710f319f5c](web+bz://test:370dc4f518483ff681c9731fc04f320b9d7670fe0359147d0b1b28710f319f5c) in a browser.  It should redirect you to <https://github.com/Rendaw/bizast>.
 
 ## Create a key for publishing
 
