@@ -39,9 +39,10 @@ class Key:
             raise ValueError('Invalid key: missing counter/nonce for encrypted_seed')
 
     @classmethod
-    def new(cls, name):
+    def new(cls, name, seed=None):
         Key._check_name(name)
-        seed = nacl.utils.random()
+        if seed is None:
+            seed = nacl.utils.random()
         signing_key = nacl.signing.SigningKey(seed, encoder=eraw)
         verify_key = signing_key.verify_key.encode(eraw)
         return cls(

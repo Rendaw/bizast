@@ -58,64 +58,153 @@ def split_name_fingerprint(key):
 
 def log_info(message):
     print(message)
+    
+    
+def validate(args, hashed_rec_key, value, oldvalue):
+    try:
+        value = json.loads(value)
+        if 'key' not in value:
+            raise ValueError('Missing field [key]')
+    except Exception as e:
+        if args.verbose:
+            log_info('Failed validation, record undecipherable: {}'.format(value))
+    try:
+        key = binascii.unhexlify(value['key'])
+        if 'signature' not in value:
+            raise ValueError('Missing field [signature]')
+        if 'version' not in value:
+            raise ValueError('Missing field [version]')
+        if 'message' not in value:
+            raise ValueError('Missing field [message]')
+        if 'name' not in value:
+            raise ValueError('Missing field [name]')
+        name = value['name']
+        if len(name) > 64:
+            raise ValueError('Resource name too long (>64 bytes)')
+        if len(value['message']) > 512:
+            raise ValueError('Message too long (>512 bytes)')
+        key = binascii.unhexlify(value['key'])
+        fingerprint = gen_fingerprint(key)
+        rec_key = '{}:{}'.format(name, fingerprint)
+        if hashed_rec_key is not None:
+            confirm_hashed_rec_key = kademlia.utils.digest(rec_key)
+            if confirm_hashed_rec_key != hashed_rec_key:
+                raise ValueError(
+                    'Hashed record keys don\'t match '
+                    '(got [{}], expected [{}])'.format(
+                        binascii.hexlify(hashed_rec_key),
+                        binascii.hexlify(confirm_hashed_rec_key),
+                    )
+                )
+        signature = binascii.unhexlify(value['signature'])
+        nacl.signing.VerifyKey(key, encoder=eraw).verify(
+            plaintext(value), signature, encoder=eraw)
+        if oldvalue:
+            oldvalue = json.loads(oldvalue)
+            if oldvalue['version'] >= value['version']:
+                raise ValueError(
+                    'Version is too old (existing [{}], new [{}])'.format(
+                        oldvalue['version'],
+                        value['version'],
+                    )
+                )
+        return True, rec_key, fingerprint
+    except Exception as e:
+        if args.verbose:
+            log_info('Failed validation: {}, value {}'.format(e, value))
+        return False, None, None
+ 
+
+class Storage:
+    """
+    Kademlia storage implementation.
+
+    Three responsibilities:
+    - Storing data
+    - Listing old keys to refresh
+    - Keeping a record of data popularity and evicting unpopular data when
+      a storage limit is reached.
+    """
+    implements(kademlia.storage.IStorage)
+
+    max_len = 5000
+
+    def __init__(self, args, ttl=604800, time=time):
+        self.args = args
+        self.time = time
+
+        # linked
+        self.popularity_queue = PQDict()
+        self.age_dict = OrderedDict()
+
+        # separate
+        self.future_popularity_queue = PQDict()
+
+        self.step = ttl
+
+    def cull(self):
+        if len(self.popularity_queue) > self.max_len:
+            key = self.popularity_queue.pop()
+            if self.args.verbose:
+                log_info('Dropping key {} (over count {})'.format(binascii.hexlify(key), self.max_len))
+            del self.age_dict[key]
+        if len(self.future_popularity_queue) > self.max_len:
+            key = self.future_popularity_queue.pop()
+            if self.args.verbose:
+                log_info('Dropping future key {} (over count {})'.format(binascii.hexlify(key), self.max_len))
+
+    def inc_popularity(self, key):
+        current = self.popularity_queue.get(key)
+        if current is not None:
+            self.popularity_queue[key] = current + self.step
+        else:
+            current = self.future_popularity_queue.get(key, self.time.time())
+            self.future_popularity_queue[key] = current + self.step
+
+    def _tripleIterable(self):
+        ikeys = self.age_dict.iterkeys()
+        ibirthday = imap(operator.itemgetter(0), self.age_dict.itervalues())
+        ivalues = imap(operator.itemgetter(1), self.age_dict.itervalues())
+        return izip(ikeys, ibirthday, ivalues)
+
+    # interface methods below
+    def __setitem__(self, key, value):
+        age, oldvalue = self.age_dict.get(key) or self.time.time(), None
+        if not validate(self.args, key, value, oldvalue)[0]:
+            return
+        if oldvalue is not None:
+            self.age_dict[key] = (age, value)
+        else:
+            age = self.future_popularity_queue.pop(key, self.time.time())
+            self.age_dict[key] = (self.time.time(), value)
+            self.popularity_queue[key] = age
+        self.cull()
+
+    def __getitem__(self, key):
+        self.inc_popularity(key)
+        self.cull()
+        return self.age_dict[key][1]
+
+    def get(self, key, default=None):
+        self.inc_popularity(key)
+        self.cull()
+        if key in self.age_dict:
+            return self.age_dict[key][1]
+        return default
+
+    def iteritemsOlderThan(self, secondsOld):
+        minBirthday = self.time.time() - secondsOld
+        zipped = self._tripleIterable()
+        matches = takewhile(lambda r: minBirthday >= r[1], zipped)
+        return imap(operator.itemgetter(0, 2), matches)
+
+    def iteritems(self):
+        self.cull()
+        return self.age_dict.iteritems()
 
 
 @defer.inlineCallbacks
 def twisted_main(args):
-    def validate(hashed_rec_key, value, oldvalue):
-        try:
-            value = json.loads(value)
-            if 'key' not in value:
-                raise ValueError('Missing field [key]')
-        except Exception as e:
-            if args.verbose:
-                log_info('Failed validation, record undecipherable: {}'.format(value))
-        try:
-            key = binascii.unhexlify(value['key'])
-            if 'signature' not in value:
-                raise ValueError('Missing field [signature]')
-            if 'version' not in value:
-                raise ValueError('Missing field [version]')
-            if 'message' not in value:
-                raise ValueError('Missing field [message]')
-            if 'name' not in value:
-                raise ValueError('Missing field [name]')
-            name = value['name']
-            if len(name) > 64:
-                raise ValueError('Resource name too long (>64 bytes)')
-            if len(value['message']) > 512:
-                raise ValueError('Message too long (>512 bytes)')
-            key = binascii.unhexlify(value['key'])
-            fingerprint = gen_fingerprint(key)
-            rec_key = '{}:{}'.format(name, fingerprint)
-            if hashed_rec_key is not None:
-                confirm_hashed_rec_key = kademlia.utils.digest(rec_key)
-                if confirm_hashed_rec_key != hashed_rec_key:
-                    raise ValueError(
-                        'Hashed record keys don\'t match '
-                        '(got [{}], expected [{}])'.format(
-                            binascii.hexlify(hashed_rec_key),
-                            binascii.hexlify(confirm_hashed_rec_key),
-                        )
-                    )
-            signature = binascii.unhexlify(value['signature'])
-            nacl.signing.VerifyKey(key, encoder=eraw).verify(
-                plaintext(value), signature, encoder=eraw)
-            if oldvalue:
-                oldvalue = json.loads(oldvalue)
-                if oldvalue['version'] >= value['version']:
-                    raise ValueError(
-                        'Version is too old (existing [{}], new [{}])'.format(
-                            oldvalue['version'],
-                            value['version'],
-                        )
-                    )
-            return True, rec_key, fingerprint
-        except Exception as e:
-            if args.verbose:
-                log_info('Failed validation: {}, value {}'.format(e, value))
-            return False, None, None
-
     log_observer = log.FileLogObserver(sys.stdout, log.INFO)
     log_observer.start()
 
@@ -132,82 +221,12 @@ def twisted_main(args):
     republish = state.get('republish', {})
 
     # Set up kademlia
-    class Storage:
-        implements(kademlia.storage.IStorage)
-
-        max_len = 5000
-
-        def __init__(self, ttl=604800):
-            # linked
-            self.popularity_queue = PQDict()
-            self.age_dict = OrderedDict()
-
-            # separate
-            self.future_popularity_queue = PQDict()
-
-            self.step = ttl
-
-        def cull(self):
-            if len(self.popularity_queue) > self.max_len:
-                key = self.popularity_queue.pop()
-                del self.age_dict[key]
-                del self.dict[key]
-            if len(self.future_popularity_queue) > self.max_len:
-                self.future_popularity_queue.pop()
-
-        def inc_popularity(self, key):
-            current = self.popularity_queue.get(key)
-            if current:
-                self.popularity_queue[key] = current + self.step
-            else:
-                current = self.future_popularity_queue.get(key, time.time())
-                self.future_popularity_queue[key] = current + self.step
-
-        def _tripleIterable(self):
-            ikeys = self.age_dict.iterkeys()
-            ibirthday = imap(operator.itemgetter(0), self.age_dict.itervalues())
-            ivalues = imap(operator.itemgetter(1), self.age_dict.itervalues())
-            return izip(ikeys, ibirthday, ivalues)
-
-        # interface methods below
-        def __setitem__(self, key, value):
-            age, oldvalue = self.age_dict.get(key) or time.time(), None
-            if not validate(key, value, oldvalue)[0]:
-                return
-            if oldvalue:
-                self.age_dict[key] = (age, value)
-            else:
-                self.age_dict[key] = (time.time(), value)
-                self.popularity_queue[key] = time.time()
-            self.cull()
-
-        def __getitem__(self, key):
-            self.inc_popularity(key)
-            self.cull()
-            return self.age_dict[key][1]
-
-        def get(self, key, default=None):
-            self.inc_popularity(key)
-            self.cull()
-            if key in self.age_dict:
-                return self.age_dict[key][1]
-            return default
-
-        def iteritemsOlderThan(self, secondsOld):
-            minBirthday = time.time() - secondsOld
-            zipped = self._tripleIterable()
-            matches = takewhile(lambda r: minBirthday >= r[1], zipped)
-            return imap(operator.itemgetter(0, 2), matches)
-
-        def iteritems(self):
-            self.cull()
-            return self.age_dict.iteritems()
 
     kserver = Server(
         ksize=state.get('ksize', 20), 
         alpha=state.get('alpha', 3), 
         seed=binascii.unhexlify(state['seed']) if 'seed' in state else None, 
-        storage=Storage())
+        storage=Storage(args))
     bootstraps = map(tuple, state.get('bootstrap', []))
     for bootstrap in args.bootstrap:
         bhost, bport = bootstrap.split(':', 2)
@@ -279,7 +298,7 @@ def twisted_main(args):
                 if not value:
                     request.write(NoResource().render(request))
                 else:
-                    valid, ign, ign = validate(None, value, None)
+                    valid, ign, ign = validate(args, None, value, None)
                     if not valid:
                         request.write(NoResource('Received invalid resource: {}'.format(value)).render(request))
                     else:
@@ -301,7 +320,7 @@ def twisted_main(args):
 
         def render_POST(self, request):
             value = request.content.getvalue()
-            valid, rec_key, fingerprint = validate(None, value, None)
+            valid, rec_key, fingerprint = validate(args, None, value, None)
             if not valid:
                 raise ValueError('Failed verification')
             log.msg('SET: key [{}] = val [{}]'.format(rec_key, value))
