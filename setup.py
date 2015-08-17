@@ -33,6 +33,6 @@ setup(
     },
     include_package_resources=True,
     package_data={
-        '': ['*.html'],
+        '': ['*.html', '*.png'],
     },
 )

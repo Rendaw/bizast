@@ -263,6 +263,9 @@ def twisted_main(args):
             if key == 'setup':
                 with open(res('browser_setup.html'), 'r') as static:
                     return static.read()
+            if key == 'icon-bizast-off.png':
+                with open(res('icon-bizast-off.png'), 'r') as static:
+                    return static.read()
             if key.startswith(webprotocol):
                 key = key[len(webprotocol):]
             if key.count(':') != 1:
