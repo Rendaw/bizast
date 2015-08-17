@@ -31,6 +31,7 @@ from pqdict import PQDict
 default_webport = 62341
 urlmatch = re.compile('[a-zA-Z+]+://')
 webprotocol = 'bz://'
+webprotocol2 = 'web+bz://'
 
 
 def res(path):
@@ -287,6 +288,8 @@ def twisted_main(args):
                     return static.read()
             if key.startswith(webprotocol):
                 key = key[len(webprotocol):]
+            if key.startswith(webprotocol2):
+                key = key[len(webprotocol2):]
             if key.count(':') != 1:
                 raise ValueError('Invalid resource id')
             try:

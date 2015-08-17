@@ -6,6 +6,10 @@
 function register() 
 {
 	navigator.registerProtocolHandler(
+		'web+bz', 
+		'http://' + location.hostname + (location.port ? ':' + location.port : '') + '/%s', 
+		'bizast')
+	navigator.registerProtocolHandler(
 		'bz', 
 		'http://' + location.hostname + (location.port ? ':' + location.port : '') + '/%s', 
 		'bizast')
